@@ -163,7 +163,7 @@ func (s *Storage) AddPost(username, postName, text string) error {
 			filepath.Join(postDir, "text"):          text,
 			filepath.Join(postDir, "title"):         postName,
 			filepath.Join(postDir, "creation_date"): time.Now().Format("2006-01-02 15:04"),
-			filepath.Join(postDir, "upvotes"):       "0",
+			filepath.Join(postDir, "upvotes"):       "",
 		},
 	)
 	if err != nil {
@@ -172,6 +172,24 @@ func (s *Storage) AddPost(username, postName, text string) error {
 
 	_ = s.updateRecents("/" + username + "/post:" + strconv.Itoa(id))
 
+	return nil
+}
+
+func (s *Storage) RemoveVote(username, location string, votes string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	_, resourcePath, _, err := parseUserResourceURI(location)
+	if err != nil {
+		return fmt.Errorf("failed to parse vote location: %w", err)
+	}
+
+	tmp := strings.ReplaceAll(votes, username+"\n", "")
+
+	err = os.WriteFile(filepath.Join(resourcePath, "upvotes"), []byte(tmp), 0644)
+	if err != nil {
+		return fmt.Errorf("failed to save upvote location: %w", err)
+	}
 	return nil
 }
 
@@ -184,18 +202,16 @@ func (s *Storage) AddVote(username, vote, location string) error {
 		return fmt.Errorf("failed to parse vote location: %w", err)
 	}
 
-	upvotes, err := os.ReadFile(filepath.Join(resourcePath, "upvotes"))
-
+	f, err := os.OpenFile(filepath.Join(resourcePath, "upvotes"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
-		upvotes = []byte("0")
+		return fmt.Errorf("Failed to open file %s: %w", f.Name(), err)
 	}
+	if _, err := f.Write([]byte(username + "\n")); err != nil {
+		return fmt.Errorf("Failed to write to file %s: %w", f.Name(), err)
 
-	votes, err := strconv.Atoi(string(upvotes))
-	votes = votes + 1
-
-	err = os.WriteFile(filepath.Join(resourcePath, "upvotes"), []byte(strconv.Itoa(votes)), 0644)
-	if err != nil {
-		return fmt.Errorf("failed to save upvote location: %w", err)
+	}
+	if err := f.Close(); err != nil {
+		return fmt.Errorf("Failed to close file %s: %w", f.Name(), err)
 	}
 
 	return nil

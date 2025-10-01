@@ -155,7 +155,6 @@ func renderPost(
 func VoteAction(ses *session.Sessions, strg *storage.Storage, w http.ResponseWriter, r *http.Request) {
 	location := r.FormValue("location")
 	vote := r.FormValue("vote")
-	author := r.FormValue("auhtor")
 
 	sessionCookie, err := r.Cookie(session.SessionCookie)
 	if err != nil {
@@ -173,13 +172,21 @@ func VoteAction(ses *session.Sessions, strg *storage.Storage, w http.ResponseWri
 		return
 	}
 
-	errr := strg.AddVote(author, vote, location)
-	if errr != nil {
-		return
+	post, err := strg.GetPost(location)
+	if strings.Contains(post.Upvotes, username) {
+		err := strg.RemoveVote(username, location, post.Upvotes)
+		if err != nil {
+			return
+		}
+	} else {
+		err := strg.AddVote(username, vote, location)
+		if err != nil {
+			return
+		}
 	}
 
+	//TODO: remove the redirect and make some css magic to show the upvote number changing client side
 	http.Redirect(w, r, r.Header.Get("Referer"), http.StatusFound)
-	//TODO: proper strg.handlevote
 }
 
 func CommentAction(ses *session.Sessions, strg *storage.Storage, w http.ResponseWriter, r *http.Request) {
